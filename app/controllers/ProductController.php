@@ -1,0 +1,206 @@
+<?php
+
+require_once 'app/models/ProductModel.php';
+require_once 'app/models/CategoryModel.php';
+require_once 'app/models/BannerModel.php';
+require_once 'app/config/database.php';
+
+class ProductController {
+
+    private $conn;
+
+    public function __construct() {
+        $database   = new Database();
+        $this->conn = $database->getConnection();
+    }
+
+    public function index() { $this->list(); }
+
+    // Hiển thị danh sách sản phẩm + banner
+    public function list() {
+        $stmt = $this->conn->query("
+            SELECT p.*, c.name AS category_name
+            FROM product p
+            LEFT JOIN category c ON p.category_id = c.id
+            ORDER BY p.id DESC
+        ");
+        $rows     = $stmt->fetchAll();
+        $products = [];
+        foreach ($rows as $row) {
+            $p = new ProductModel(
+                $row['id'], $row['name'], $row['description'],
+                $row['price'], $row['image'] ?? 'default.jpg', $row['category_id']
+            );
+            $p->categoryName = $row['category_name'] ?? '';
+            $products[] = $p;
+        }
+
+        $banners    = $this->_getBanners();
+        $categories = $this->_getCategories();
+
+        include 'app/views/product/list.php';
+    }
+
+    // Thêm sản phẩm
+    public function add() {
+        $errors     = [];
+        $categories = $this->_getCategories();
+
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            $name        = trim($_POST['name']        ?? '');
+            $description = trim($_POST['description'] ?? '');
+            $price       = trim($_POST['price']       ?? '');
+            $category_id = intval($_POST['category_id'] ?? 0);
+
+            if (empty($name)) {
+                $errors[] = 'Tên sản phẩm là bắt buộc.';
+            } elseif (strlen($name) < 10 || strlen($name) > 100) {
+                $errors[] = 'Tên sản phẩm phải từ 10 đến 100 ký tự.';
+            }
+            if (!is_numeric($price) || $price <= 0) {
+                $errors[] = 'Giá phải là số dương lớn hơn 0.';
+            }
+            if ($category_id <= 0) {
+                $errors[] = 'Vui lòng chọn danh mục sản phẩm.';
+            }
+
+            $imageName = 'default.jpg';
+            if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
+                $targetDir    = "public/images/";
+                if (!is_dir($targetDir)) mkdir($targetDir, 0755, true);
+                $allowedTypes = ['image/jpeg','image/png','image/gif','image/webp'];
+                if (!in_array($_FILES['image']['type'], $allowedTypes)) {
+                    $errors[] = 'Chỉ chấp nhận file ảnh JPG, PNG, GIF, WEBP.';
+                } elseif ($_FILES['image']['size'] > 5 * 1024 * 1024) {
+                    $errors[] = 'Kích thước ảnh không được vượt quá 5MB.';
+                } else {
+                    $ext       = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                    $imageName = time() . '_' . uniqid() . '.' . $ext;
+                    if (!move_uploaded_file($_FILES['image']['tmp_name'], $targetDir . $imageName)) {
+                        $errors[] = 'Không thể upload hình ảnh.';
+                    }
+                }
+            }
+
+            if (empty($errors)) {
+                $stmt = $this->conn->prepare(
+                    "INSERT INTO product (name, description, price, image, category_id)
+                     VALUES (:name, :description, :price, :image, :category_id)"
+                );
+                $stmt->execute([
+                    ':name'        => $name, ':description' => $description,
+                    ':price'       => $price, ':image'       => $imageName,
+                    ':category_id' => $category_id,
+                ]);
+                header('Location: /Bai01_BuiNguyenHuyToan/Product/list');
+                exit();
+            }
+        }
+
+        include 'app/views/product/add.php';
+    }
+
+    // Sửa sản phẩm
+    public function edit($id) {
+        $categories = $this->_getCategories();
+
+        $stmt = $this->conn->prepare("SELECT * FROM product WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $row = $stmt->fetch();
+        if (!$row) die('Sản phẩm không tồn tại.');
+
+        $product = new ProductModel(
+            $row['id'], $row['name'], $row['description'],
+            $row['price'], $row['image'] ?? 'default.jpg', $row['category_id']
+        );
+        $errors = [];
+
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            $name        = trim($_POST['name']        ?? '');
+            $description = trim($_POST['description'] ?? '');
+            $price       = trim($_POST['price']       ?? '');
+            $category_id = intval($_POST['category_id'] ?? 0);
+
+            if (empty($name)) {
+                $errors[] = 'Tên sản phẩm là bắt buộc.';
+            } elseif (strlen($name) < 10 || strlen($name) > 100) {
+                $errors[] = 'Tên sản phẩm phải từ 10 đến 100 ký tự.';
+            }
+            if (!is_numeric($price) || $price <= 0) $errors[] = 'Giá phải là số dương lớn hơn 0.';
+            if ($category_id <= 0) $errors[] = 'Vui lòng chọn danh mục sản phẩm.';
+
+            $imageName = $product->getImage();
+            if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
+                $targetDir    = "public/images/";
+                $allowedTypes = ['image/jpeg','image/png','image/gif','image/webp'];
+                if (!in_array($_FILES['image']['type'], $allowedTypes)) {
+                    $errors[] = 'Chỉ chấp nhận file ảnh JPG, PNG, GIF, WEBP.';
+                } elseif ($_FILES['image']['size'] > 5 * 1024 * 1024) {
+                    $errors[] = 'Kích thước ảnh không được vượt quá 5MB.';
+                } else {
+                    $ext      = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                    $newImage = time() . '_' . uniqid() . '.' . $ext;
+                    if (move_uploaded_file($_FILES['image']['tmp_name'], $targetDir . $newImage)) {
+                        $imageName = $newImage;
+                    } else {
+                        $errors[] = 'Không thể upload hình ảnh.';
+                    }
+                }
+            }
+
+            if (empty($errors)) {
+                $stmt = $this->conn->prepare(
+                    "UPDATE product SET name=:name, description=:description, price=:price,
+                     image=:image, category_id=:category_id WHERE id=:id"
+                );
+                $stmt->execute([
+                    ':name'        => $name, ':description' => $description,
+                    ':price'       => $price, ':image'       => $imageName,
+                    ':category_id' => $category_id, ':id' => $id,
+                ]);
+                header('Location: /Bai01_BuiNguyenHuyToan/Product/list');
+                exit();
+            }
+
+            $product->setName($name);
+            $product->setDescription($description);
+            $product->setPrice($price);
+            $product->setCategoryID($category_id);
+        }
+
+        include 'app/views/product/edit.php';
+    }
+
+    // Xóa sản phẩm
+    public function delete($id) {
+        $stmt = $this->conn->prepare("DELETE FROM product WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        header('Location: /Bai01_BuiNguyenHuyToan/Product/list');
+        exit();
+    }
+
+    private function _getCategories() {
+        $stmt = $this->conn->query("SELECT * FROM category ORDER BY name ASC");
+        return $stmt->fetchAll();
+    }
+
+    private function _getBanners() {
+        try {
+            $this->conn->exec("
+                CREATE TABLE IF NOT EXISTS banner (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    image VARCHAR(255) NOT NULL,
+                    title VARCHAR(150) DEFAULT '',
+                    position TINYINT NOT NULL DEFAULT 1
+                )
+            ");
+            $stmt = $this->conn->query("SELECT * FROM banner ORDER BY position ASC");
+            $rows = $stmt->fetchAll();
+            $map  = [];
+            foreach ($rows as $r) { $map[$r['position']] = $r; }
+            return $map;
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+}
