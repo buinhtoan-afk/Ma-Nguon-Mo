@@ -73,3 +73,45 @@ INSERT INTO `product` (`id`, `name`, `description`, `price`, `image`, `category_
 /*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+
+-- ============ THÊM MỚI: Bảng user ============
+CREATE TABLE IF NOT EXISTS `user` (
+  `id`         INT AUTO_INCREMENT PRIMARY KEY,
+  `fullname`   VARCHAR(100) NOT NULL,
+  `email`      VARCHAR(150) NOT NULL UNIQUE,
+  `phone`      VARCHAR(20)  DEFAULT '',
+  `password`   VARCHAR(255) NOT NULL,
+  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============ THÊM MỚI: Bảng order ============
+CREATE TABLE IF NOT EXISTS `order` (
+  `id`              INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id`         INT DEFAULT NULL,
+  `fullname`        VARCHAR(100) NOT NULL,
+  `phone`           VARCHAR(20)  NOT NULL,
+  `address`         TEXT         NOT NULL,
+  `city`            VARCHAR(100) NOT NULL,
+  `note`            TEXT,
+  `shipping_method` VARCHAR(20) DEFAULT 'standard',
+  `payment_method`  VARCHAR(20) DEFAULT 'card',
+  `discount`        DECIMAL(15,2) DEFAULT 0,
+  `total`           DECIMAL(15,2) NOT NULL,
+  `status`          VARCHAR(20)   DEFAULT 'pending',
+  `created_at`      DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============ THÊM MỚI: Bảng order_item ============
+CREATE TABLE IF NOT EXISTS `order_item` (
+  `id`         INT AUTO_INCREMENT PRIMARY KEY,
+  `order_id`   INT  NOT NULL,
+  `product_id` INT  NOT NULL,
+  `name`       VARCHAR(200) NOT NULL,
+  `price`      DECIMAL(15,2) NOT NULL,
+  `qty`        INT NOT NULL,
+  `image`      VARCHAR(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Sửa giá product từ DECIMAL(10,2) thành DECIMAL(15,2)
+ALTER TABLE `product` MODIFY COLUMN `price` DECIMAL(15,2) NOT NULL;

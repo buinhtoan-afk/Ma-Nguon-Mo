@@ -1,7 +1,11 @@
 <?php
+session_start();
+
 require_once 'app/models/ProductModel.php';
 require_once 'app/models/CategoryModel.php';
 require_once 'app/models/BannerModel.php';
+require_once 'app/models/UserModel.php';
+require_once 'app/models/OrderModel.php';
 require_once 'app/config/database.php';
 
 $url = $_GET['url'] ?? '';
@@ -9,7 +13,8 @@ $url = rtrim($url, '/');
 $url = filter_var($url, FILTER_SANITIZE_URL);
 $url = explode('/', $url);
 
-if (!empty($url[0]) && $url[0] === 'Bai01_BuiNguyenHuyToan') {
+// Bỏ prefix thư mục nếu có
+if (!empty($url[0]) && in_array($url[0], ['Bai01_BuiNguyenHuyToan','Ma-Nguon-Mo'])) {
     array_shift($url);
 }
 
