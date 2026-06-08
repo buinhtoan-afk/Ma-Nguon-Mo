@@ -1,0 +1,4 @@
+To: dltt@gmail.com
+Name: Đặng Lê Tấn Tài
+Verify Link: http://localhost:8080/Auth/verify/4d7ccd0d761339a300d8f839c2a48014d09e98fb9fb9c4349593bf1de082f8f1
+Time: 2026-06-08 01:35:26

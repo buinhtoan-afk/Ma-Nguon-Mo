@@ -106,7 +106,7 @@ body{background:#f5f5f5}
       <thead>
         <tr>
           <th>#</th><th>Avatar</th><th>Họ tên</th><th>Email</th>
-          <th>Vai trò</th><th>Trạng thái</th><th>Xác thực</th>
+          <th>Vai trò</th><th>Mã NV</th><th>Trạng thái</th><th>Xác thực</th>
           <th>Ngày đăng ký</th><th>Thao tác</th>
         </tr>
       </thead>
@@ -131,6 +131,7 @@ body{background:#f5f5f5}
               <?= $u['role']==='admin'?'👑 Admin':'👤 User' ?>
             </span>
           </td>
+          <td style="font-size:12px;color:#6366f1;font-weight:600"><?= htmlspecialchars($u['employee_code'] ?? '-') ?></td>
           <td>
             <span class="badge <?= $u['is_locked']?'badge-locked':'badge-active' ?>">
               <?= $u['is_locked']?'🔒 Bị khóa':'✅ Hoạt động' ?>
@@ -145,24 +146,20 @@ body{background:#f5f5f5}
           <td>
             <div class="action-btns">
               <?php if ($u['id'] != $_SESSION['user_id']): ?>
-                <!-- Khóa / Mở khóa -->
-                <a href="<?= $baseUrl ?>/Auth/toggleLock/<?= $u['id'] ?>"
-                   class="btn-sm <?= $u['is_locked']?'btn-unlock':'btn-lock' ?>"
-                   onclick="return confirm('<?= $u['is_locked']?'Mở khóa':'Khóa' ?> tài khoản này?')">
-                  <?= $u['is_locked']?'🔓 Mở':'🔒 Khóa' ?>
-                </a>
-                <!-- Đổi role -->
-                <a href="<?= $baseUrl ?>/Auth/changeRole/<?= $u['id'] ?>"
-                   class="btn-sm btn-role"
-                   onclick="return confirm('Đổi role cho <?= htmlspecialchars(addslashes($u['fullname'])) ?>?')">
-                  ⇄ Role
-                </a>
-                <!-- Xóa -->
-                <a href="<?= $baseUrl ?>/Auth/deleteUser/<?= $u['id'] ?>"
-                   class="btn-sm btn-del"
-                   onclick="return confirm('Xóa tài khoản <?= htmlspecialchars(addslashes($u['fullname'])) ?>? Không thể hoàn tác!')">
-                  🗑️
-                </a>
+                <form method="POST" style="display:inline">
+                  <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+                  <?php if ($u['is_locked']): ?>
+                  <button name="action" value="unlock" class="btn-sm btn-unlock" onclick="return confirm('Mở khóa tài khoản này?')">🔓 Mở</button>
+                  <?php else: ?>
+                  <button name="action" value="lock" class="btn-sm btn-lock" onclick="return confirm('Khóa tài khoản này?')">🔒 Khóa</button>
+                  <?php endif; ?>
+                  <?php if ($u['role']==='admin'): ?>
+                  <button name="action" value="set_user" class="btn-sm btn-role" onclick="return confirm('Thu hồi quyền Admin?')">↓ User</button>
+                  <?php else: ?>
+                  <button name="action" value="set_admin" class="btn-sm btn-role" onclick="return confirm('Cấp quyền Admin?')">↑ Admin</button>
+                  <?php endif; ?>
+                  <button name="action" value="delete" class="btn-sm btn-del" onclick="return confirm('Xóa tài khoản này? Không thể hoàn tác!')">🗑️</button>
+                </form>
               <?php else: ?>
                 <span style="color:#aaa;font-size:12px">Tài khoản bạn</span>
               <?php endif; ?>

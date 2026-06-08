@@ -186,4 +186,73 @@ class OrderController {
     private function _base() {
         return rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
     }
+    // ── Danh sách đơn hàng ────────────────────────────────────────────────
+    public function list() {
+        AuthMiddleware::requireLogin();
+        $isAdmin = ($_SESSION['user_role'] ?? '') === 'admin';
+        $search  = trim($_GET['search'] ?? '');
+        $filter  = $_GET['filter'] ?? 'all';
+        $where   = '1=1';
+        $params  = [];
+
+        if (!$isAdmin) {
+            $where .= " AND o.user_id = :uid";
+            $params[':uid'] = $_SESSION['user_id'];
+        } else {
+            if ($search) {
+                $where .= " AND (o.fullname LIKE :s OR o.phone LIKE :s OR o.id LIKE :s)";
+                $params[':s'] = "%$search%";
+            }
+        }
+        if ($filter !== 'all') {
+            $where .= " AND o.status = :status";
+            $params[':status'] = $filter;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT o.*, u.email as user_email
+            FROM \`order\` o
+            LEFT JOIN user u ON u.id = o.user_id
+            WHERE $where
+            ORDER BY o.created_at DESC
+        ");
+        $stmt->execute($params);
+        $orders = $stmt->fetchAll();
+        include 'app/views/order/list.php';
+    }
+
+    // ── Cập nhật trạng thái (Admin) ───────────────────────────────────────
+    public function updateStatus() {
+        AuthMiddleware::requireLogin();
+        if (($_SESSION['user_role'] ?? '') !== 'admin') {
+            http_response_code(403); exit();
+        }
+        $id     = intval($_POST['order_id'] ?? 0);
+        $status = $_POST['status'] ?? 'pending';
+        $allowed = ['pending','processing','shipped','delivered','cancelled'];
+        if ($id && in_array($status, $allowed)) {
+            $this->conn->prepare("UPDATE \`order\` SET status=:s WHERE id=:id")
+                ->execute([':s'=>$status,':id'=>$id]);
+        }
+        header('Location: ' . $this->_base() . '/Order/list'); exit();
+    }
+
+    // ── Chi tiết đơn hàng ─────────────────────────────────────────────────
+    public function detail($orderId) {
+        AuthMiddleware::requireLogin();
+        $isAdmin = ($_SESSION['user_role'] ?? '') === 'admin';
+        $stmt = $this->conn->prepare("SELECT * FROM \`order\` WHERE id=:id");
+        $stmt->execute([':id'=>$orderId]);
+        $orderRow = $stmt->fetch();
+        if (!$orderRow) die('Đơn hàng không tồn tại.');
+        if (!$isAdmin && $orderRow['user_id'] != $_SESSION['user_id']) {
+            header('Location: ' . $this->_base() . '/errors/403'); exit();
+        }
+        $order = new OrderModel($orderRow);
+        $iStmt = $this->conn->prepare("SELECT * FROM order_item WHERE order_id=:oid");
+        $iStmt->execute([':oid'=>$orderId]);
+        $items = $iStmt->fetchAll();
+        include 'app/views/order/detail.php';
+    }
+
 }

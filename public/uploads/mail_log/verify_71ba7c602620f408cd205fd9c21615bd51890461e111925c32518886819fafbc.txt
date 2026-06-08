@@ -1,0 +1,4 @@
+To: nvt@gmail.com
+Name: Nguyễn Văn Toàn
+Verify Link: http://localhost:8080/Auth/verify/71ba7c602620f408cd205fd9c21615bd51890461e111925c32518886819fafbc
+Time: 2026-06-08 00:44:09

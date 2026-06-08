@@ -1,0 +1,4 @@
+To: bnht@gmail.com
+Name: Bùi Nguyễn Huy Toàn
+Verify Link: http://localhost:8080/Auth/verify/876435d19f9e24e8deaae43c098069d6525abd38812b9c4356cda6f277b260bd
+Time: 2026-06-08 00:32:38
