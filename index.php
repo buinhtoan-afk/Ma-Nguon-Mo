@@ -35,8 +35,32 @@ if (isset($url[0]) && strtolower($url[0]) === 'api') {
         exit;
     }
 
-    $resource = $url[1] ?? '';   // 'product' | 'category'
-    $id       = $url[2] ?? null; // ID nếu có
+    $resource = $url[1] ?? '';   // 'product' | 'category' | 'cart' | 'order'
+    $seg2     = $url[2] ?? null; // ID hoặc sub-action
+    $seg3     = $url[3] ?? null; // sub-action khi có ID (vd: /api/order/5/cancel)
+    $method   = strtoupper($_SERVER['REQUEST_METHOD']);
+
+    // ──────────────────────────────────────────────────────────
+    // ĐỊNH TUYẾN AUTH: /api/login  và  /api/register
+    // ──────────────────────────────────────────────────────────
+    if ($resource === 'login' || $resource === 'register') {
+        require_once 'app/controllers/AuthApiController.php';
+        $authController = new AuthApiController();
+
+        if ($resource === 'login' && $method === 'POST') {
+            $authController->login();
+            exit;
+        }
+        if ($resource === 'register' && $method === 'POST') {
+            $authController->register();
+            exit;
+        }
+
+        SessionHelper::jsonResponse([
+            'success' => false,
+            'message' => 'Method không được hỗ trợ cho endpoint này',
+        ], 405);
+    }
 
     if (empty($resource)) {
         SessionHelper::jsonResponse([
@@ -53,6 +77,17 @@ if (isset($url[0]) && strtolower($url[0]) === 'api') {
                 'POST   /api/category'         => 'Thêm danh mục [Admin]',
                 'PUT    /api/category/{id}'    => 'Cập nhật danh mục [Admin]',
                 'DELETE /api/category/{id}'    => 'Xóa danh mục [Admin]',
+                'GET    /api/cart'              => 'Xem giỏ hàng',
+                'POST   /api/cart/add'          => 'Thêm sản phẩm vào giỏ',
+                'PUT    /api/cart/update'       => 'Cập nhật số lượng',
+                'DELETE /api/cart/{product_id}' => 'Xóa 1 sản phẩm khỏi giỏ',
+                'DELETE /api/cart/clear'        => 'Xóa toàn bộ giỏ',
+                'GET    /api/cart/total'        => 'Tính tổng tiền giỏ hàng',
+                'POST   /api/order'             => 'Tạo đơn hàng từ giỏ hàng',
+                'GET    /api/order'             => 'Danh sách đơn hàng',
+                'GET    /api/order/{id}'        => 'Chi tiết đơn hàng',
+                'PUT    /api/order/{id}/cancel' => 'Hủy đơn hàng',
+                'PUT    /api/order/{id}/status' => 'Cập nhật trạng thái đơn hàng [Admin]',
             ],
         ], 400);
     }
@@ -70,7 +105,66 @@ if (isset($url[0]) && strtolower($url[0]) === 'api') {
 
     require_once $apiControllerPath;
     $controller = new $apiControllerName();
-    $method     = strtoupper($_SERVER['REQUEST_METHOD']);
+
+    // ──────────────────────────────────────────────────────────
+    // ĐỊNH TUYẾN ĐẶC BIỆT: /api/cart  và  /api/order
+    // ──────────────────────────────────────────────────────────
+    if ($resource === 'cart') {
+        // GET    /api/cart            → index()  : xem giỏ hàng
+        // GET    /api/cart/total      → total()  : tính tổng tiền
+        // POST   /api/cart/add        → add()    : thêm sản phẩm
+        // PUT    /api/cart/update     → update() : cập nhật số lượng
+        // DELETE /api/cart/clear      → clear()  : xóa toàn bộ giỏ
+        // DELETE /api/cart/{id}       → remove() : xóa 1 sản phẩm
+        if ($method === 'GET' && $seg2 === 'total') {
+            $controller->total(); exit;
+        }
+        if ($method === 'GET' && $seg2 === null) {
+            $controller->index(); exit;
+        }
+        if ($method === 'POST' && $seg2 === 'add') {
+            $controller->add(); exit;
+        }
+        if (in_array($method, ['PUT', 'PATCH']) && $seg2 === 'update') {
+            $controller->update(); exit;
+        }
+        if ($method === 'DELETE' && $seg2 === 'clear') {
+            $controller->clear(); exit;
+        }
+        if ($method === 'DELETE' && $seg2 !== null) {
+            $controller->remove($seg2); exit;
+        }
+        SessionHelper::jsonResponse(['success' => false, 'message' => 'Endpoint /api/cart không hợp lệ'], 404);
+    }
+
+    if ($resource === 'order') {
+        // GET    /api/order            → index()      : danh sách đơn hàng
+        // GET    /api/order/{id}       → show()       : chi tiết đơn hàng
+        // POST   /api/order            → store()      : tạo đơn từ giỏ hàng
+        // PUT    /api/order/{id}/cancel→ cancel()     : hủy đơn hàng
+        // PUT    /api/order/{id}/status→ updateStatus(): cập nhật trạng thái [Admin]
+        if ($method === 'GET' && $seg2 === null) {
+            $controller->index(); exit;
+        }
+        if ($method === 'GET' && $seg2 !== null) {
+            $controller->show($seg2); exit;
+        }
+        if ($method === 'POST' && $seg2 === null) {
+            $controller->store(); exit;
+        }
+        if (in_array($method, ['PUT', 'PATCH']) && $seg2 !== null && $seg3 === 'cancel') {
+            $controller->cancel($seg2); exit;
+        }
+        if (in_array($method, ['PUT', 'PATCH']) && $seg2 !== null && $seg3 === 'status') {
+            $controller->updateStatus($seg2); exit;
+        }
+        SessionHelper::jsonResponse(['success' => false, 'message' => 'Endpoint /api/order không hợp lệ'], 404);
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ĐỊNH TUYẾN CHUẨN CRUD: /api/{resource}/{id?}  (product, category, ...)
+    // ──────────────────────────────────────────────────────────
+    $id = $seg2;
 
     // Map HTTP method → action
     switch ($method) {

@@ -74,10 +74,74 @@ class SessionHelper {
     }
 
     /**
-     * Kiểm tra user đã đăng nhập (session)
+     * Kiểm tra user đã đăng nhập.
+     * Hỗ trợ 2 cách:
+     *  1. Session PHP (đăng nhập qua trình duyệt)
+     *  2. JWT Bearer token (dùng Postman / client bên ngoài)
+     *     Header: Authorization: Bearer <token>
      */
     public static function isLoggedIn(): bool {
         if (session_status() === PHP_SESSION_NONE) session_start();
-        return isset($_SESSION['user_id']);
+
+        // Cách 1: Session PHP
+        if (isset($_SESSION['user_id'])) {
+            return true;
+        }
+
+        // Cách 2: JWT Bearer token
+        $payload = self::getJwtPayload();
+        if ($payload && isset($payload['id'])) {
+            // Gán vào session tạm để các hàm khác (currentUserId...) dùng được
+            $_SESSION['user_id']   = $payload['id'];
+            $_SESSION['user_email'] = $payload['email'] ?? '';
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Đọc và verify JWT từ header Authorization: Bearer <token>
+     */
+    public static function getJwtPayload(): ?array {
+        $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        if (!str_starts_with($auth, 'Bearer ')) return null;
+        $token = substr($auth, 7);
+
+        // Tránh conflict với ADMIN_API_KEY
+        if ($token === self::ADMIN_API_KEY) return null;
+
+        require_once 'app/helpers/JwtHelper.php';
+        $data = JwtHelper::verify($token);
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * Middleware: yêu cầu đăng nhập, trả JSON 401 nếu chưa
+     */
+    public static function requireLoginApi(): void {
+        if (!self::isLoggedIn()) {
+            self::jsonResponse([
+                'success' => false,
+                'message' => 'Bạn cần đăng nhập để sử dụng chức năng này',
+                'hint'    => 'Thêm header: Authorization: Bearer <token> (lấy token từ POST /api/login)',
+            ], 401);
+        }
+    }
+
+    /**
+     * Lấy user_id hiện tại (session hoặc JWT)
+     */
+    public static function currentUserId() {
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        return $_SESSION['user_id'] ?? null;
+    }
+
+    /**
+     * Lấy role hiện tại (session)
+     */
+    public static function currentUserRole(): string {
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        return $_SESSION['user_role'] ?? 'user';
     }
 }

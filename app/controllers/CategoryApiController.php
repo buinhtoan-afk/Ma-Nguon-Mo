@@ -167,9 +167,17 @@ class CategoryApiController {
             ], 404);
         }
 
-        // Cập nhật product: bỏ category_id
-        $this->conn->prepare("UPDATE product SET category_id = NULL WHERE category_id = :id")
-            ->execute([':id' => (int)$id]);
+        // Kiểm tra còn sản phẩm thuộc danh mục này không
+        $cnt = $this->conn->prepare("SELECT COUNT(*) FROM product WHERE category_id = :id");
+        $cnt->execute([':id' => (int)$id]);
+        $productCount = (int)$cnt->fetchColumn();
+
+        if ($productCount > 0) {
+            SessionHelper::jsonResponse([
+                'success' => false,
+                'message' => "Không thể xóa danh mục vì vẫn còn $productCount sản phẩm thuộc danh mục này",
+            ], 409);
+        }
 
         $this->conn->prepare("DELETE FROM category WHERE id = :id")
             ->execute([':id' => (int)$id]);
